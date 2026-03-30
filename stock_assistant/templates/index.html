@@ -1,0 +1,1094 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>📈 Stock Assistant</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:        #070b14;
+  --surface:   #0d1421;
+  --card:      #111827;
+  --card2:     #161f30;
+  --border:    #1e2d45;
+  --border2:   #243347;
+  --amber:     #f59e0b;
+  --amber-dim: #b45309;
+  --green:     #10b981;
+  --red:       #ef4444;
+  --blue:      #3b82f6;
+  --text:      #e2e8f0;
+  --muted:     #64748b;
+  --muted2:    #94a3b8;
+  --font-ui:   'DM Sans', sans-serif;
+  --font-data: 'JetBrains Mono', monospace;
+  --font-logo: 'Orbitron', sans-serif;
+  --radius:    10px;
+  --shadow:    0 4px 24px rgba(0,0,0,.5);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--font-ui);
+  font-size:14px;
+  line-height:1.6;
+  min-height:100vh;
+}
+/* ── noise texture overlay ── */
+body::before{
+  content:'';
+  position:fixed;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events:none;z-index:0;
+}
+
+/* ── header ── */
+header{
+  position:sticky;top:0;z-index:100;
+  background:rgba(7,11,20,.92);
+  backdrop-filter:blur(12px);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 28px;height:60px;
+}
+.logo{
+  font-family:var(--font-logo);
+  font-size:15px;letter-spacing:2px;
+  color:var(--amber);
+  display:flex;align-items:center;gap:10px;
+}
+.logo-dot{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--green);
+  box-shadow:0 0 8px var(--green);
+  animation:pulse 2s infinite;
+}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.header-right{display:flex;align-items:center;gap:12px}
+.btn-settings{
+  background:none;border:1px solid var(--border2);
+  color:var(--muted2);padding:6px 14px;border-radius:6px;
+  cursor:pointer;font-family:var(--font-ui);font-size:13px;
+  transition:.2s;display:flex;align-items:center;gap:6px;
+}
+.btn-settings:hover{border-color:var(--amber);color:var(--amber)}
+.api-status{font-family:var(--font-data);font-size:11px;color:var(--muted)}
+
+/* ── tabs ── */
+nav{
+  display:flex;gap:0;
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  padding:0 28px;
+}
+.tab-btn{
+  background:none;border:none;cursor:pointer;
+  color:var(--muted);font-family:var(--font-ui);font-size:13.5px;
+  font-weight:500;padding:16px 24px;
+  border-bottom:2px solid transparent;
+  transition:.2s;display:flex;align-items:center;gap:8px;
+  position:relative;top:1px;
+}
+.tab-btn:hover{color:var(--text)}
+.tab-btn.active{color:var(--amber);border-bottom-color:var(--amber)}
+.tab-icon{font-size:16px}
+
+/* ── main layout ── */
+main{max-width:1280px;margin:0 auto;padding:28px 28px}
+.tab-pane{display:none;animation:fadeIn .25s ease}
+.tab-pane.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ── section title ── */
+.section-title{
+  font-family:var(--font-logo);font-size:11px;letter-spacing:3px;
+  color:var(--muted);text-transform:uppercase;margin-bottom:20px;
+  display:flex;align-items:center;gap:10px;
+}
+.section-title::after{
+  content:'';flex:1;height:1px;background:var(--border);
+}
+
+/* ── cards ── */
+.card{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:var(--radius);padding:22px;
+  box-shadow:var(--shadow);
+}
+.card + .card{margin-top:16px}
+
+/* ── inputs ── */
+input,select{
+  background:var(--surface);border:1px solid var(--border2);
+  color:var(--text);padding:10px 14px;border-radius:7px;
+  font-family:var(--font-ui);font-size:14px;
+  outline:none;transition:.2s;width:100%;
+}
+input::placeholder{color:var(--muted)}
+input:focus,select:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(245,158,11,.1)}
+
+/* ── buttons ── */
+.btn{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:9px 18px;border-radius:7px;border:none;cursor:pointer;
+  font-family:var(--font-ui);font-size:13.5px;font-weight:500;
+  transition:.2s;white-space:nowrap;
+}
+.btn-primary{background:var(--amber);color:#000}
+.btn-primary:hover{background:#fbbf24}
+.btn-ghost{background:transparent;border:1px solid var(--border2);color:var(--muted2)}
+.btn-ghost:hover{border-color:var(--amber);color:var(--amber)}
+.btn-danger{background:transparent;border:1px solid var(--border2);color:var(--red)}
+.btn-danger:hover{background:rgba(239,68,68,.1)}
+.btn-green{background:var(--green);color:#000}
+.btn-green:hover{background:#34d399}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ── tab1 layout ── */
+.tab1-grid{display:grid;grid-template-columns:340px 1fr;gap:20px;align-items:start}
+
+/* ── search ── */
+.search-wrap{position:relative}
+.search-results{
+  position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:50;
+  background:var(--card2);border:1px solid var(--border2);
+  border-radius:var(--radius);overflow:hidden;
+  box-shadow:0 8px 32px rgba(0,0,0,.6);
+  display:none;max-height:360px;overflow-y:auto;
+}
+.search-results.show{display:block}
+.search-item{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 14px;cursor:pointer;transition:.15s;border-bottom:1px solid var(--border);
+}
+.search-item:last-child{border-bottom:none}
+.search-item:hover{background:var(--card)}
+.si-left{display:flex;flex-direction:column;gap:2px}
+.si-sym{font-family:var(--font-data);font-size:13px;color:var(--amber);font-weight:600}
+.si-name{font-size:12px;color:var(--muted2)}
+.si-badge{
+  font-family:var(--font-data);font-size:10px;padding:2px 7px;
+  border-radius:4px;border:1px solid;
+}
+.badge-TW{color:#22d3ee;border-color:#22d3ee33;background:#22d3ee0d}
+.badge-US{color:#a78bfa;border-color:#a78bfa33;background:#a78bfa0d}
+.badge-ETF{color:#34d399;border-color:#34d39933;background:#34d3990d}
+
+/* ── watchlist table ── */
+.wl-table{width:100%;border-collapse:collapse}
+.wl-table th{
+  text-align:left;padding:10px 14px;
+  font-family:var(--font-logo);font-size:10px;letter-spacing:2px;
+  color:var(--muted);border-bottom:1px solid var(--border);
+}
+.wl-table td{padding:12px 14px;border-bottom:1px solid var(--border);vertical-align:middle}
+.wl-table tr:last-child td{border-bottom:none}
+.wl-table tr:hover td{background:rgba(255,255,255,.02)}
+.sym-cell{font-family:var(--font-data);font-size:14px;font-weight:600;color:var(--amber)}
+.name-cell{font-size:13px;color:var(--text)}
+.price-cell{font-family:var(--font-data);font-size:14px;font-weight:500;text-align:right}
+.chg-pos{color:var(--green)}
+.chg-neg{color:var(--red)}
+.chg-zero{color:var(--muted)}
+.empty-state{
+  text-align:center;padding:52px 20px;
+  color:var(--muted);font-size:13px;
+}
+.empty-icon{font-size:40px;margin-bottom:12px;display:block}
+
+/* ── Tab 2 ── */
+.stock-selector{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.stock-checkbox{
+  display:flex;align-items:center;gap:7px;
+  padding:7px 13px;border-radius:6px;border:1px solid var(--border2);
+  cursor:pointer;transition:.2s;user-select:none;font-size:13px;
+}
+.stock-checkbox:hover{border-color:var(--amber)}
+.stock-checkbox.selected{border-color:var(--amber);background:rgba(245,158,11,.08);color:var(--amber)}
+.stock-checkbox input{display:none}
+.sc-sym{font-family:var(--font-data);font-weight:600}
+
+.news-actions{display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap}
+
+.news-section{margin-bottom:24px}
+.news-stock-header{
+  display:flex;align-items:center;gap:10px;margin-bottom:12px;
+  padding-bottom:10px;border-bottom:1px solid var(--border);
+}
+.nsh-sym{font-family:var(--font-data);font-size:16px;color:var(--amber);font-weight:600}
+.nsh-name{font-size:13px;color:var(--muted2)}
+
+.news-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.news-col-title{
+  font-family:var(--font-logo);font-size:10px;letter-spacing:2px;
+  color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:8px;
+}
+.news-col-title::after{content:'';flex:1;height:1px;background:var(--border)}
+
+.news-article{
+  padding:12px;border-radius:7px;border:1px solid var(--border);
+  margin-bottom:8px;transition:.2s;cursor:pointer;
+}
+.news-article:hover{border-color:var(--border2);background:var(--card2)}
+.na-title{font-size:13px;font-weight:500;margin-bottom:4px;line-height:1.4}
+.na-title a{color:var(--text);text-decoration:none}
+.na-title a:hover{color:var(--amber)}
+.na-meta{font-size:11px;color:var(--muted);display:flex;gap:8px}
+.na-source{color:var(--muted2)}
+
+.summary-box{
+  background:var(--surface);border:1px solid var(--border2);
+  border-radius:var(--radius);padding:20px;margin-top:16px;
+}
+.summary-content{
+  font-size:13.5px;line-height:1.8;color:var(--text);
+  white-space:pre-wrap;
+}
+.summary-content h3{
+  color:var(--amber);font-size:14px;margin:14px 0 6px;
+}
+.summary-content strong{color:var(--muted2)}
+
+/* ── Tab 3 ── */
+.tag-group{margin-bottom:24px}
+.tag-group-label{
+  font-family:var(--font-logo);font-size:10px;letter-spacing:2.5px;
+  color:var(--amber-dim);margin-bottom:12px;display:flex;align-items:center;gap:8px;
+}
+.tag-group-label::after{content:'';flex:1;height:1px;background:var(--border)}
+.tags-wrap{display:flex;flex-wrap:wrap;gap:8px}
+.tag{
+  padding:7px 15px;border-radius:20px;border:1px solid var(--border2);
+  cursor:pointer;font-size:13px;transition:.2s;user-select:none;
+  color:var(--muted2);
+}
+.tag:hover{border-color:var(--border2);color:var(--text);background:var(--card2)}
+.tag.active{
+  border-color:var(--amber);color:var(--amber);
+  background:rgba(245,158,11,.09);
+}
+.tag.active-industry{border-color:#22d3ee;color:#22d3ee;background:rgba(34,211,238,.07)}
+.tag.active-strategy{border-color:#a78bfa;color:#a78bfa;background:rgba(167,139,250,.07)}
+.tag.active-technical{border-color:var(--green);color:var(--green);background:rgba(16,185,129,.07)}
+.tag.active-risk{border-color:var(--red);color:var(--red);background:rgba(239,68,68,.07)}
+.tag.active-horizon{border-color:#fb923c;color:#fb923c;background:rgba(251,146,60,.07)}
+
+.screen-result{
+  background:var(--surface);border:1px solid var(--border2);
+  border-radius:var(--radius);padding:24px;margin-top:24px;
+}
+.result-content{
+  font-size:13.5px;line-height:1.85;color:var(--text);
+  white-space:pre-wrap;
+}
+.result-content h2{
+  color:var(--amber);font-size:15px;margin:20px 0 12px;
+  font-family:var(--font-logo);letter-spacing:1px;
+}
+.result-content h3{
+  color:var(--muted2);font-size:13.5px;margin:12px 0 4px;font-weight:600;
+}
+.result-content strong{color:var(--text);font-weight:600}
+.result-content hr{border:none;border-top:1px solid var(--border);margin:18px 0}
+
+/* ── loading / toast ── */
+.spinner{
+  width:20px;height:20px;border:2px solid var(--border2);
+  border-top-color:var(--amber);border-radius:50%;
+  animation:spin .8s linear infinite;display:inline-block;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.toast{
+  position:fixed;bottom:28px;right:28px;z-index:999;
+  background:var(--card2);border:1px solid var(--border2);
+  padding:12px 20px;border-radius:8px;font-size:13.5px;
+  box-shadow:var(--shadow);animation:slideUp .3s ease;
+  max-width:380px;
+}
+.toast-success{border-color:var(--green);color:var(--green)}
+.toast-error{border-color:var(--red);color:var(--red)}
+.toast-info{border-color:var(--amber);color:var(--amber)}
+@keyframes slideUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+/* ── modal ── */
+.modal-overlay{
+  display:none;position:fixed;inset:0;z-index:200;
+  background:rgba(0,0,0,.7);backdrop-filter:blur(6px);
+  align-items:center;justify-content:center;
+}
+.modal-overlay.show{display:flex}
+.modal{
+  background:var(--card);border:1px solid var(--border2);
+  border-radius:12px;padding:30px;width:460px;max-width:95vw;
+  box-shadow:0 20px 60px rgba(0,0,0,.7);
+}
+.modal-title{
+  font-family:var(--font-logo);font-size:13px;letter-spacing:2px;
+  color:var(--amber);margin-bottom:22px;
+}
+.form-label{font-size:12px;color:var(--muted);margin-bottom:6px;display:block}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:22px}
+
+/* ── scrollbar ── */
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+
+/* ── misc ── */
+.flex{display:flex}.gap-10{gap:10px}.mt-16{margin-top:16px}
+.text-amber{color:var(--amber)}.text-muted{color:var(--muted)}
+.text-green{color:var(--green)}.text-red{color:var(--red)}
+.font-data{font-family:var(--font-data)}
+.criteria-box{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:7px;padding:14px 18px;margin-bottom:16px;
+  font-size:12.5px;color:var(--muted2);line-height:1.8;
+}
+.criteria-label{font-family:var(--font-logo);font-size:10px;
+  letter-spacing:2px;color:var(--muted);margin-bottom:6px}
+.selected-count{
+  font-family:var(--font-data);font-size:11px;
+  color:var(--muted);margin-left:auto;
+}
+
+@media(max-width:768px){
+  .tab1-grid{grid-template-columns:1fr}
+  .news-grid{grid-template-columns:1fr}
+  nav{padding:0 16px}
+  main{padding:20px 16px}
+}
+</style>
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header>
+  <div class="logo">
+    <div class="logo-dot"></div>
+    STOCK ASSISTANT
+  </div>
+  <div class="header-right">
+    <span class="api-status" id="apiStatus">API KEY: 未設定</span>
+    <button class="btn-settings" onclick="openSettings()">⚙️ 設定</button>
+  </div>
+</header>
+
+<!-- ── Tabs ── -->
+<nav>
+  <button class="tab-btn active" onclick="switchTab(0)" data-tab="0">
+    <span class="tab-icon">📋</span>自選清單
+  </button>
+  <button class="tab-btn" onclick="switchTab(1)" data-tab="1">
+    <span class="tab-icon">📡</span>新聞情報
+  </button>
+  <button class="tab-btn" onclick="switchTab(2)" data-tab="2">
+    <span class="tab-icon">🎯</span>選股雷達
+  </button>
+</nav>
+
+<!-- ── Main ── -->
+<main>
+
+  <!-- ══════════════════════════════════════════
+       TAB 1 – Watchlist
+  ══════════════════════════════════════════ -->
+  <div class="tab-pane active" id="tab0">
+    <div class="tab1-grid">
+
+      <!-- Left: Search Panel -->
+      <div>
+        <div class="section-title">加入自選</div>
+        <div class="card">
+          <!-- Market toggle -->
+          <div style="display:flex;gap:8px;margin-bottom:14px">
+            <button class="btn btn-ghost" id="mktTW" onclick="setMarket('TW')"
+              style="flex:1;justify-content:center;border-color:var(--amber);color:var(--amber)">
+              🇹🇼 台股
+            </button>
+            <button class="btn btn-ghost" id="mktUS" onclick="setMarket('US')"
+              style="flex:1;justify-content:center">
+              🇺🇸 美股
+            </button>
+          </div>
+
+          <!-- Search input -->
+          <div class="search-wrap">
+            <input type="text" id="searchInput" placeholder="搜尋股票名稱或代號…"
+              oninput="onSearchInput(this.value)" autocomplete="off">
+            <div class="search-results" id="searchResults"></div>
+          </div>
+
+          <p style="font-size:12px;color:var(--muted);margin-top:10px">
+            輸入關鍵字搜尋，點擊結果加入自選清單
+          </p>
+        </div>
+      </div>
+
+      <!-- Right: Watchlist -->
+      <div>
+        <div class="section-title" style="justify-content:space-between">
+          <span>自選清單</span>
+          <div class="flex gap-10" style="align-items:center">
+            <span id="wlCount" class="text-muted" style="font-size:12px;font-family:var(--font-data)">0 檔</span>
+            <button class="btn btn-ghost" style="padding:6px 12px;font-size:12px" onclick="loadWatchlist()">
+              ↻ 更新報價
+            </button>
+          </div>
+        </div>
+        <div class="card" style="padding:0;overflow:hidden">
+          <table class="wl-table">
+            <thead>
+              <tr>
+                <th>代號</th>
+                <th>名稱</th>
+                <th>市場</th>
+                <th style="text-align:right">現價</th>
+                <th style="text-align:right">漲跌%</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="watchlistBody">
+              <tr><td colspan="6">
+                <div class="empty-state">
+                  <span class="empty-icon">📭</span>
+                  尚未加入任何股票<br>
+                  <span style="font-size:12px">在左側搜尋後點擊加入</span>
+                </div>
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       TAB 2 – News & Summarize
+  ══════════════════════════════════════════ -->
+  <div class="tab-pane" id="tab1">
+    <div class="section-title">選擇股票</div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="stock-selector" id="newsStockSelector">
+        <span style="color:var(--muted);font-size:13px">請先在「自選清單」加入股票</span>
+      </div>
+    </div>
+
+    <div class="news-actions">
+      <button class="btn btn-primary" onclick="fetchNews()">
+        📡 抓取最新新聞
+      </button>
+      <button class="btn btn-ghost" id="btnSummarize" onclick="summarizeNews()" disabled>
+        🤖 Claude 整理摘要
+      </button>
+      <button class="btn btn-green" id="btnExportPDF" onclick="exportPDF()" disabled>
+        📄 匯出 PDF
+      </button>
+    </div>
+
+    <div id="newsContent"></div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       TAB 3 – Stock Screener
+  ══════════════════════════════════════════ -->
+  <div class="tab-pane" id="tab2">
+    <div style="display:grid;grid-template-columns:1fr 380px;gap:24px;align-items:start">
+      <div>
+        <div class="section-title">篩選條件標籤</div>
+        <div class="card" id="tagContainer">
+          <div style="color:var(--muted);text-align:center;padding:20px">載入標籤中…</div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:20px">
+          <span id="selectedTagsCount" style="font-size:12px;color:var(--muted);font-family:var(--font-data)">
+            已選 0 個條件
+          </span>
+          <div class="flex gap-10">
+            <button class="btn btn-ghost" onclick="clearAllTags()">清除全部</button>
+            <button class="btn btn-primary" onclick="runScreener()">
+              🎯 開始選股
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="section-title">操作說明</div>
+        <div class="card">
+          <p style="font-size:13px;color:var(--muted2);line-height:1.8;margin-bottom:14px">
+            選擇多個條件標籤，系統將組合成最佳化的 prompt 詢問 Claude，取得台股與美股推薦標的。
+          </p>
+          <div style="border-top:1px solid var(--border);padding-top:14px">
+            <div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-family:var(--font-logo);letter-spacing:1px">標籤說明</div>
+            <div style="font-size:12px;color:var(--muted2);line-height:2">
+              <span style="color:#22d3ee">●</span> 產業板塊<br>
+              <span style="color:#a78bfa">●</span> 投資策略<br>
+              <span style="color:var(--green)">●</span> 技術指標<br>
+              <span style="color:var(--red)">●</span> 風險偏好<br>
+              <span style="color:#fb923c">●</span> 操作週期
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:16px" id="criteriaPreview" class="hidden"></div>
+      </div>
+    </div>
+
+    <div id="screenResult"></div>
+  </div>
+
+</main>
+
+<!-- ── Settings Modal ── -->
+<div class="modal-overlay" id="settingsModal">
+  <div class="modal">
+    <div class="modal-title">⚙ SETTINGS</div>
+    <label class="form-label">Claude API Key</label>
+    <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-…">
+    <p style="font-size:12px;color:var(--muted);margin-top:8px">
+      請至 <a href="https://console.anthropic.com" target="_blank" style="color:var(--amber)">console.anthropic.com</a> 取得 API Key。金鑰儲存於本地伺服器，不會上傳。
+    </p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeSettings()">取消</button>
+      <button class="btn btn-primary" onclick="saveSettings()">儲存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════
+const state = {
+  watchlist: [],
+  apiKey: '',
+  selectedMarket: 'TW',
+  searchDebounce: null,
+  searchResults: [],
+  newsData: {},
+  summaries: {},
+  selectedNews: new Set(),
+  selectedTags: { industry: [], strategy: [], technical: [], risk: [], horizon: [] }
+}
+
+// ═══════════════════════════════════════════
+// Init
+// ═══════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', async () => {
+  loadScreenTags()
+  await loadConfig()
+  await loadWatchlist()
+})
+
+// ═══════════════════════════════════════════
+// Config / Settings
+// ═══════════════════════════════════════════
+async function loadConfig() {
+  const cfg = await apiFetch('/api/config') || {}
+  state.apiKey = cfg.api_key || ''
+  updateApiStatus()
+}
+
+function updateApiStatus() {
+  const el = document.getElementById('apiStatus')
+  if (state.apiKey) {
+    el.textContent = `API KEY: ${state.apiKey.slice(0,12)}…`
+    el.style.color = 'var(--green)'
+  } else {
+    el.textContent = 'API KEY: 未設定'
+    el.style.color = 'var(--muted)'
+  }
+}
+
+function openSettings() {
+  document.getElementById('apiKeyInput').value = state.apiKey
+  document.getElementById('settingsModal').classList.add('show')
+}
+function closeSettings() {
+  document.getElementById('settingsModal').classList.remove('show')
+}
+async function saveSettings() {
+  state.apiKey = document.getElementById('apiKeyInput').value.trim()
+  await apiFetch('/api/config', { method:'POST', json:{ api_key: state.apiKey } })
+  updateApiStatus()
+  closeSettings()
+  toast('設定已儲存', 'success')
+}
+
+// ═══════════════════════════════════════════
+// Tabs
+// ═══════════════════════════════════════════
+function switchTab(idx) {
+  document.querySelectorAll('.tab-btn').forEach((b,i) =>
+    b.classList.toggle('active', i === idx))
+  document.querySelectorAll('.tab-pane').forEach((p,i) =>
+    p.classList.toggle('active', i === idx))
+  if (idx === 1) renderNewsStockSelector()
+}
+
+// ═══════════════════════════════════════════
+// Tab 1 – Watchlist
+// ═══════════════════════════════════════════
+function setMarket(m) {
+  state.selectedMarket = m
+  document.getElementById('mktTW').style.borderColor =
+    m==='TW' ? 'var(--amber)' : 'var(--border2)'
+  document.getElementById('mktTW').style.color =
+    m==='TW' ? 'var(--amber)' : 'var(--muted2)'
+  document.getElementById('mktUS').style.borderColor =
+    m==='US' ? 'var(--amber)' : 'var(--border2)'
+  document.getElementById('mktUS').style.color =
+    m==='US' ? 'var(--amber)' : 'var(--muted2)'
+}
+
+function onSearchInput(val) {
+  clearTimeout(state.searchDebounce)
+  const el = document.getElementById('searchResults')
+  if (val.trim().length < 1) { hideSearch(); return }
+  // Show loading immediately
+  el.innerHTML = `<div style="padding:14px 16px;color:var(--muted);font-size:13px;display:flex;align-items:center;gap:8px">
+    <span class="spinner" style="width:14px;height:14px;border-width:2px"></span>搜尋中…</div>`
+  el.classList.add('show')
+  state.searchDebounce = setTimeout(() => doSearch(val.trim()), 400)
+}
+
+async function doSearch(q) {
+  const el = document.getElementById('searchResults')
+  const data = await apiFetch(`/api/search?q=${encodeURIComponent(q)}`)
+  if (!el.classList.contains('show')) return // user already cleared input
+
+  if (!data || data.error) {
+    el.innerHTML = `<div style="padding:14px 16px;color:var(--red);font-size:13px">
+      ⚠️ 搜尋失敗，請確認伺服器連線</div>`
+    return
+  }
+  if (!data.length) {
+    el.innerHTML = `<div style="padding:14px 16px;color:var(--muted);font-size:13px">
+      找不到「${q}」相關股票</div>`
+    return
+  }
+
+  // Store results in state so onclick can reference by index safely
+  state.searchResults = data
+  el.innerHTML = data.map((s, i) => `
+    <div class="search-item" data-idx="${i}">
+      <div class="si-left">
+        <span class="si-sym">${s.symbol}</span>
+        <span class="si-name">${s.name}</span>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+        <span class="si-badge badge-${s.market}">${s.market}</span>
+        ${s.type==='ETF'?'<span class="si-badge badge-ETF">ETF</span>':''}
+      </div>
+    </div>`).join('')
+
+  // Use mousedown so it fires before blur hides the dropdown
+  el.querySelectorAll('.search-item').forEach(item => {
+    item.addEventListener('mousedown', (e) => {
+      e.preventDefault() // prevent input blur
+      const stock = state.searchResults[+item.dataset.idx]
+      if (stock) addStock(stock)
+    })
+  })
+}
+
+function hideSearch() {
+  document.getElementById('searchResults').classList.remove('show')
+}
+
+// Hide when clicking outside both input AND results
+document.addEventListener('click', e => {
+  const input = document.getElementById('searchInput')
+  const results = document.getElementById('searchResults')
+  if (!input.contains(e.target) && !results.contains(e.target))
+    hideSearch()
+})
+
+async function addStock(s) {
+  hideSearch()
+  document.getElementById('searchInput').value = ''
+  const res = await apiFetch('/api/watchlist/add', { method:'POST', json:s })
+  if (res?.ok) { toast(`✅ 已加入 ${s.symbol} ${s.name}`, 'success'); loadWatchlist() }
+  else toast(res?.msg || '加入失敗', 'error')
+}
+
+async function loadWatchlist() {
+  const data = await apiFetch('/api/watchlist') || []
+  state.watchlist = data
+  renderWatchlist()
+}
+
+function renderWatchlist() {
+  const tbody = document.getElementById('watchlistBody')
+  document.getElementById('wlCount').textContent = `${state.watchlist.length} 檔`
+
+  if (!state.watchlist.length) {
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">
+      <span class="empty-icon">📭</span>
+      尚未加入任何股票<br><span style="font-size:12px">在左側搜尋後點擊加入</span>
+    </div></td></tr>`
+    return
+  }
+
+  tbody.innerHTML = state.watchlist.map(s => {
+    const price = s.price != null ? s.price.toLocaleString() : '—'
+    const chg = s.change_pct
+    const chgStr = chg != null ? `${chg > 0 ? '+' : ''}${chg.toFixed(2)}%` : '—'
+    const chgClass = chg > 0 ? 'chg-pos' : chg < 0 ? 'chg-neg' : 'chg-zero'
+    return `<tr>
+      <td class="sym-cell">${s.symbol}</td>
+      <td class="name-cell">${s.name}</td>
+      <td><span class="si-badge badge-${s.market}">${s.market}</span></td>
+      <td class="price-cell font-data">${price}</td>
+      <td class="price-cell font-data ${chgClass}">${chgStr}</td>
+      <td style="text-align:right">
+        <button class="btn btn-danger" style="padding:5px 10px;font-size:12px"
+          onclick="removeStock('${s.symbol}')">✕</button>
+      </td>
+    </tr>`
+  }).join('')
+}
+
+async function removeStock(sym) {
+  await apiFetch('/api/watchlist/remove', { method:'POST', json:{ symbol:sym } })
+  toast(`已移除 ${sym}`, 'info')
+  loadWatchlist()
+}
+
+// ═══════════════════════════════════════════
+// Tab 2 – News
+// ═══════════════════════════════════════════
+function renderNewsStockSelector() {
+  const el = document.getElementById('newsStockSelector')
+  if (!state.watchlist.length) {
+    el.innerHTML = `<span style="color:var(--muted);font-size:13px">請先在「自選清單」加入股票</span>`
+    return
+  }
+  el.innerHTML = state.watchlist.map(s => `
+    <label class="stock-checkbox ${state.selectedNews.has(s.symbol)?'selected':''}"
+      onclick="toggleNewsStock('${s.symbol}',this)">
+      <input type="checkbox" ${state.selectedNews.has(s.symbol)?'checked':''}>
+      <span class="sc-sym">${s.symbol}</span>
+      <span style="font-size:12px;color:var(--muted)">${s.market}</span>
+    </label>`).join('')
+}
+
+function toggleNewsStock(sym, el) {
+  if (state.selectedNews.has(sym)) {
+    state.selectedNews.delete(sym)
+    el.classList.remove('selected')
+  } else {
+    state.selectedNews.add(sym)
+    el.classList.add('selected')
+  }
+}
+
+async function fetchNews() {
+  if (!state.selectedNews.size) { toast('請先選擇要查詢的股票', 'error'); return }
+  const stocks = state.watchlist.filter(s => state.selectedNews.has(s.symbol))
+  const el = document.getElementById('newsContent')
+  el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted)">
+    <div class="spinner" style="margin:0 auto 12px"></div>正在抓取新聞…</div>`
+
+  const data = await apiFetch('/api/news', { method:'POST', json:{ stocks } })
+  if (!data) { el.innerHTML = '<div style="color:var(--red);padding:20px">新聞抓取失敗</div>'; return }
+
+  state.newsData = data
+  state.summaries = {}
+  renderNewsContent()
+  document.getElementById('btnSummarize').disabled = false
+  document.getElementById('btnExportPDF').disabled = true
+}
+
+function renderNewsContent() {
+  const el = document.getElementById('newsContent')
+  const html = Object.entries(state.newsData).map(([sym, info]) => {
+    const google = info.articles.filter(a => a.source === 'Google News')
+    const yahoo = info.articles.filter(a => a.source === 'Yahoo Finance')
+
+    const articleHtml = (list) => list.length
+      ? list.map(a => `
+        <div class="news-article">
+          <div class="na-title">
+            <a href="${a.link}" target="_blank">${a.title}</a>
+          </div>
+          <div class="na-meta">
+            <span class="na-source">${a.source}</span>
+            <span>${a.published ? new Date(a.published).toLocaleDateString('zh-TW') : ''}</span>
+          </div>
+          ${a.summary ? `<div style="font-size:12px;color:var(--muted);margin-top:6px;line-height:1.6">${a.summary.slice(0,160)}…</div>` : ''}
+        </div>`).join('')
+      : `<div style="color:var(--muted);font-size:13px;padding:10px">無資料</div>`
+
+    const summary = state.summaries[sym]
+    const summaryHtml = summary ? `
+      <div class="summary-box">
+        <div style="font-family:var(--font-logo);font-size:10px;letter-spacing:2px;color:var(--amber);margin-bottom:12px">
+          🤖 CLAUDE 分析摘要
+        </div>
+        <div class="summary-content">${renderMarkdown(summary)}</div>
+      </div>` : ''
+
+    return `
+      <div class="news-section">
+        <div class="news-stock-header">
+          <span class="nsh-sym">${sym}</span>
+          <span class="nsh-name">${info.stock?.name || ''}</span>
+          <span class="si-badge badge-${info.stock?.market || 'US'}" style="margin-left:auto">
+            ${info.stock?.market}
+          </span>
+        </div>
+        <div class="news-grid">
+          <div>
+            <div class="news-col-title">📰 Google News</div>
+            ${articleHtml(google)}
+          </div>
+          <div>
+            <div class="news-col-title">📊 Yahoo Finance</div>
+            ${articleHtml(yahoo)}
+          </div>
+        </div>
+        ${summaryHtml}
+      </div>`
+  }).join('')
+
+  el.innerHTML = html || `<div style="color:var(--muted);padding:20px">無新聞資料</div>`
+}
+
+async function summarizeNews() {
+  if (!state.apiKey) { openSettings(); toast('請先設定 API Key', 'error'); return }
+  if (!Object.keys(state.newsData).length) { toast('請先抓取新聞', 'error'); return }
+
+  const btn = document.getElementById('btnSummarize')
+  btn.disabled = true
+  btn.innerHTML = '<span class="spinner"></span> Claude 分析中…'
+
+  const data = await apiFetch('/api/summarize', {
+    method:'POST',
+    json:{ api_key: state.apiKey, news_data: state.newsData }
+  })
+
+  btn.disabled = false
+  btn.innerHTML = '🤖 Claude 整理摘要'
+
+  if (data?.error) { toast(data.error, 'error'); return }
+  state.summaries = data || {}
+  renderNewsContent()
+  document.getElementById('btnExportPDF').disabled = false
+  toast('摘要完成！', 'success')
+}
+
+async function exportPDF() {
+  if (!Object.keys(state.summaries).length) { toast('請先執行 Claude 摘要', 'error'); return }
+  const btn = document.getElementById('btnExportPDF')
+  btn.disabled = true
+  btn.innerHTML = '<span class="spinner"></span> 產生 PDF…'
+
+  const data = await apiFetch('/api/export_pdf', {
+    method:'POST',
+    json:{ summaries: state.summaries, news_data: state.newsData }
+  })
+
+  btn.disabled = false
+  btn.innerHTML = '📄 匯出 PDF'
+
+  if (data?.ok) {
+    toast(`✅ PDF 已儲存：${data.filename}`, 'success')
+    // Show path info
+    const el = document.getElementById('newsContent')
+    el.insertAdjacentHTML('afterbegin', `
+      <div style="background:rgba(16,185,129,.08);border:1px solid var(--green);
+        border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--green)">
+        📄 PDF 已儲存至：<span style="font-family:var(--font-data)">${data.path}</span>
+      </div>`)
+  } else {
+    toast('PDF 匯出失敗', 'error')
+  }
+}
+
+// ═══════════════════════════════════════════
+// Tab 3 – Screener
+// ═══════════════════════════════════════════
+const TAG_COLORS = {
+  industry: 'industry', strategy: 'strategy',
+  technical: 'technical', risk: 'risk', horizon: 'horizon'
+}
+const TAG_LABELS = {
+  industry: '🏭 產業板塊',
+  strategy: '💡 投資策略',
+  technical: '📊 技術條件',
+  risk: '⚖️ 風險偏好',
+  horizon: '⏱ 操作週期'
+}
+
+// 標籤資料直接寫在前端，不依賴 API
+const SCREEN_TAGS = {
+  industry: ['科技/半導體','AI/雲端運算','金融/銀行保險','醫療/生技製藥',
+    '能源/綠能','消費/零售電商','工業/自動化','電動車/汽車供應鏈','不動產/REITs','原物料/農業'],
+  strategy: ['高成長股','深度價值股','高股息收益','動能強勢股',
+    '逆勢佈局','景氣循環股','防禦型穩健','小型潛力股','機構低持股','ESG永續投資'],
+  technical: ['突破歷史新高','均線多頭排列','RSI超賣反彈','MACD黃金交叉',
+    '底部確認打底','強勢整理蓄勢','量增價漲','週線轉強訊號'],
+  risk: ['保守穩健（低波動）','平衡配置（中風險）','積極成長（高風險）','高風險高報酬（投機型）'],
+  horizon: ['短線（1-4週）','中線（1-3月）','長線（6月以上）','波段操作']
+}
+
+function loadScreenTags() {
+  const container = document.getElementById('tagContainer')
+  container.innerHTML = Object.entries(SCREEN_TAGS).map(([category, items]) => `
+    <div class="tag-group">
+      <div class="tag-group-label">${TAG_LABELS[category] || category}</div>
+      <div class="tags-wrap">
+        ${items.map(item => {
+          // escape for safe inline onclick usage
+          const safe = item.replace(/'/g, '&#39;')
+          return `<div class="tag" data-category="${category}" data-value="${safe}"
+            onclick="toggleTag('${category}', this.dataset.value, this)">${item}</div>`
+        }).join('')}
+      </div>
+    </div>`).join('')
+}
+
+function toggleTag(category, value, el) {
+  const arr = state.selectedTags[category]
+  const idx = arr.indexOf(value)
+  if (idx >= 0) {
+    arr.splice(idx, 1)
+    el.classList.remove(`active-${category}`, 'active')
+  } else {
+    // Risk: single select
+    if (category === 'risk') {
+      arr.length = 0
+      document.querySelectorAll(`[data-category="risk"]`).forEach(e =>
+        e.classList.remove(`active-risk`, 'active'))
+    }
+    arr.push(value)
+    el.classList.add(`active-${category}`)
+  }
+  updateSelectedCount()
+  updateCriteriaPreview()
+}
+
+function clearAllTags() {
+  Object.keys(state.selectedTags).forEach(k => state.selectedTags[k] = [])
+  document.querySelectorAll('.tag').forEach(el =>
+    el.className = 'tag')
+  updateSelectedCount()
+  updateCriteriaPreview()
+}
+
+function updateSelectedCount() {
+  const total = Object.values(state.selectedTags).flat().length
+  document.getElementById('selectedTagsCount').textContent = `已選 ${total} 個條件`
+}
+
+function updateCriteriaPreview() {
+  const el = document.getElementById('criteriaPreview')
+  const lines = []
+  const labels = {industry:'產業',strategy:'策略',technical:'技術',risk:'風險',horizon:'週期'}
+  for (const [k, v] of Object.entries(state.selectedTags)) {
+    if (v.length) lines.push(`<b style="color:var(--muted2)">${labels[k]}：</b>${v.join(' ／ ')}`)
+  }
+  if (!lines.length) { el.classList.add('hidden'); return }
+  el.classList.remove('hidden')
+  el.innerHTML = `
+    <div class="criteria-box">
+      <div class="criteria-label">篩選條件預覽</div>
+      ${lines.map(l => `<div style="font-size:12.5px">${l}</div>`).join('')}
+    </div>`
+}
+
+async function runScreener() {
+  if (!state.apiKey) { openSettings(); toast('請先設定 API Key', 'error'); return }
+  if (!Object.values(state.selectedTags).flat().length) {
+    toast('請至少選擇一個標籤', 'error'); return
+  }
+
+  const el = document.getElementById('screenResult')
+  el.innerHTML = `<div style="text-align:center;padding:60px;color:var(--muted)">
+    <div class="spinner" style="margin:0 auto 16px;width:28px;height:28px;border-width:3px"></div>
+    Claude 正在選股分析中…<br>
+    <span style="font-size:12px">通常需要 10-20 秒</span>
+  </div>`
+
+  const data = await apiFetch('/api/screen', {
+    method:'POST',
+    json:{ api_key: state.apiKey, tags: state.selectedTags }
+  })
+
+  if (data?.error) { el.innerHTML = `<div class="card" style="color:var(--red)">${data.error}</div>`; return }
+
+  el.innerHTML = `
+    <div class="screen-result">
+      <div style="font-family:var(--font-logo);font-size:10px;letter-spacing:2px;
+        color:var(--amber);margin-bottom:4px">🎯 CLAUDE 選股結果</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:20px;
+        font-family:var(--font-data)">${new Date().toLocaleString('zh-TW')}</div>
+      ${data.criteria ? `
+        <div style="background:var(--card);border:1px solid var(--border);border-radius:7px;
+          padding:12px 16px;margin-bottom:20px;font-size:12px;color:var(--muted2);line-height:1.9">
+          <div style="font-family:var(--font-logo);font-size:9px;letter-spacing:2px;
+            color:var(--muted);margin-bottom:6px">篩選條件</div>
+          ${data.criteria.split('\n').join('<br>')}
+        </div>` : ''}
+      <div class="result-content">${renderMarkdown(data.result)}</div>
+      <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);
+        font-size:11px;color:var(--muted)">
+        ⚠️ 以上為 AI 分析參考，非投資建議。市場有風險，請自行判斷。
+      </div>
+    </div>`
+}
+
+// ═══════════════════════════════════════════
+// Markdown renderer (simple)
+// ═══════════════════════════════════════════
+function renderMarkdown(text) {
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^#{1,2} (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^#{3} (.+)$/gm, '<h3>$1</h3>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/^---+$/gm, '<hr>')
+    .replace(/^[-•]\s+(.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/g, m => `<ul style="margin:6px 0 6px 20px">${m}</ul>`)
+    .replace(/\n\n/g, '</p><p style="margin-top:8px">')
+    .replace(/\n/g, '<br>')
+}
+
+// ═══════════════════════════════════════════
+// Utils
+// ═══════════════════════════════════════════
+async function apiFetch(url, opts = {}) {
+  try {
+    const res = await fetch(url, {
+      method: opts.method || 'GET',
+      headers: opts.json ? { 'Content-Type': 'application/json' } : {},
+      body: opts.json ? JSON.stringify(opts.json) : undefined
+    })
+    return await res.json()
+  } catch (e) {
+    console.error(e)
+    return null
+  }
+}
+
+let toastTimer = null
+function toast(msg, type = 'info') {
+  const old = document.querySelector('.toast')
+  if (old) old.remove()
+  const el = document.createElement('div')
+  el.className = `toast toast-${type}`
+  el.textContent = msg
+  document.body.appendChild(el)
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => el.remove(), 3500)
+}
+</script>
+</body>
+</html>
