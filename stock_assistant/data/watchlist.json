@@ -19,5 +19,68 @@
     "market": "US",
     "exchange": "NMS",
     "type": "EQUITY"
+  },
+  {
+    "symbol": "AMD",
+    "name": "Advanced Micro Devices, Inc.",
+    "market": "US",
+    "exchange": "NMS",
+    "type": "EQUITY"
+  },
+  {
+    "symbol": "ETN",
+    "name": "Eaton Corporation plc",
+    "market": "US",
+    "exchange": "NYQ",
+    "type": "EQUITY"
+  },
+  {
+    "symbol": "QQQ",
+    "name": "Invesco QQQ Trust",
+    "market": "US",
+    "exchange": "NGM",
+    "type": "ETF"
+  },
+  {
+    "symbol": "SPY",
+    "name": "State Street SPDR S&P 500 ETF Trust",
+    "market": "US",
+    "exchange": "PCX",
+    "type": "ETF"
+  },
+  {
+    "symbol": "VTI",
+    "name": "Vanguard Total Stock Market Index Fund ETF Shares",
+    "market": "US",
+    "exchange": "PCX",
+    "type": "ETF"
+  },
+  {
+    "symbol": "0050.TW",
+    "name": "Yuanta/P-shares Taiwan Top 50 ETF",
+    "market": "TW",
+    "exchange": "TAI",
+    "type": "ETF"
+  },
+  {
+    "symbol": "2330.TW",
+    "name": "Taiwan Semiconductor Manufacturing Company Limited",
+    "market": "TW",
+    "exchange": "TAI",
+    "type": "EQUITY"
+  },
+  {
+    "symbol": "NVDA",
+    "name": "NVIDIA Corporation",
+    "market": "US",
+    "exchange": "NMS",
+    "type": "EQUITY"
+  },
+  {
+    "symbol": "GOOG",
+    "name": "Alphabet Inc.",
+    "market": "US",
+    "exchange": "NMS",
+    "type": "EQUITY"
   }
 ]
