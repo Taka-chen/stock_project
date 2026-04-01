@@ -221,19 +221,83 @@ def get_news():
     return jsonify(result)
 
 
+def _ai_call(api_key, prompt, max_tokens=900):
+    """
+    支援 Groq 和 Gemini 兩種 API Key，自動判斷並呼叫。
+    - Groq Key 格式：gsk_...
+    - Gemini Key 格式：AIzaSy...
+    """
+    if api_key.startswith('gsk_'):
+        return _groq_call(api_key, prompt, max_tokens)
+    else:
+        return _gemini_rest_call(api_key, prompt, max_tokens)
+
+
+def _groq_call(api_key, prompt, max_tokens=900):
+    """Groq API - 免費且快速（每天 14400 次請求）。"""
+    models = ['llama-3.3-70b-versatile', 'llama3-8b-8192', 'mixtral-8x7b-32768']
+    last_err = None
+    for model in models:
+        try:
+            r = requests.post(
+                'https://api.groq.com/openai/v1/chat/completions',
+                headers={'Authorization': f'Bearer {api_key}',
+                         'Content-Type': 'application/json'},
+                json={'model': model,
+                      'messages': [{'role': 'user', 'content': prompt}],
+                      'max_tokens': max_tokens, 'temperature': 0.7},
+                timeout=60
+            )
+            data = r.json()
+            if r.status_code == 200:
+                text = data['choices'][0]['message']['content']
+                print(f'[groq] 成功使用: {model}')
+                return text
+            err_msg = data.get('error', {}).get('message', str(data))
+            print(f'[groq] {model} 失敗: {err_msg[:120]}')
+            last_err = err_msg
+        except Exception as e:
+            print(f'[groq] {model} 例外: {e}')
+            last_err = str(e)
+    raise Exception(f'Groq 失敗：{last_err}')
+
+
+def _gemini_rest_call(api_key, prompt, max_tokens=900):
+    """Gemini REST API（需在 aistudio.google.com 建立的 Key 才有免費額度）。"""
+    models = ['gemini-1.5-flash', 'gemini-1.5-flash-8b']
+    last_err = None
+    for model in models:
+        url = (f'https://generativelanguage.googleapis.com/v1beta/models/'
+               f'{model}:generateContent?key={api_key}')
+        try:
+            r = requests.post(url, json={
+                'contents': [{'parts': [{'text': prompt}]}],
+                'generationConfig': {'maxOutputTokens': max_tokens, 'temperature': 0.7}
+            }, timeout=60)
+            data = r.json()
+            if r.status_code == 200:
+                text = data['candidates'][0]['content']['parts'][0]['text']
+                print(f'[gemini] 成功使用: {model}')
+                return text
+            err_msg = data.get('error', {}).get('message', str(data))
+            print(f'[gemini] {model} 失敗({r.status_code}): {err_msg[:120]}')
+            last_err = err_msg
+        except Exception as e:
+            print(f'[gemini] {model} 例外: {e}')
+            last_err = str(e)
+    raise Exception(f'Gemini 失敗（請確認 Key 是在 aistudio.google.com 建立的）：{last_err}')
+
+
 @app.route('/api/summarize', methods=['POST'])
 def summarize():
-    import anthropic as ant
     data = request.json
     api_key = data.get('api_key', '').strip()
     news_data = data.get('news_data', {})
 
     if not api_key:
-        return jsonify({'error': '請先在右上角⚙️設定中輸入 Claude API Key'}), 400
+        return jsonify({'error': '請先在右上角⚙️設定中輸入 Gemini API Key'}), 400
 
-    client = ant.Anthropic(api_key=api_key)
     summaries = {}
-
     for symbol, info in news_data.items():
         articles = info.get('articles', [])
         stock = info.get('stock', {})
@@ -247,36 +311,27 @@ def summarize():
             for a in articles
         )
 
-        prompt = f"""你是專業股票分析師，請分析 {stock.get('name', symbol)}（{symbol}）的最新市場新聞。
+        prompt = f"""你是專業股票分析師，請根據 {stock.get('name', symbol)}（{symbol}）的最新市場新聞和財務數據以及其他你所能找到的公司基本面信息進行分析。
+                    所有的回答內容都請附上的參考的資料引用來源
+                    請以繁體中文輸出（Markdown 格式）：
 
-新聞資料：
-{news_text}
+                    ### 📊 市場動態摘要
+                    （精準描述當前市場動態）
 
-請以繁體中文輸出（Markdown 格式）：
+                    ### 🔑 關鍵事件
+                   （列出近期最重要的新聞事件最多10條以下，並說明其內容和影響）
 
-### 📊 市場動態摘要
-（2-3句精準描述當前市場動態）
+                    ### 📈 股價影響分析
+                    **正面因素：** ...
+                    **負面因素：** ...
 
-### 🔑 關鍵事件
-- 事件一
-- 事件二
+                    ### ⚠️ 風險提示
+                    - 風險一
 
-### 📈 股價影響分析
-**正面因素：** ...
-**負面因素：** ...
-
-### ⚠️ 風險提示
-- 風險一
-
-資訊要具體精準，避免模糊用語。"""
+                    資訊要具體精準，避免模糊用語。"""
 
         try:
-            msg = client.messages.create(
-                model='claude-haiku-4-5-20251001',
-                max_tokens=900,
-                messages=[{'role': 'user', 'content': prompt}]
-            )
-            summaries[symbol] = msg.content[0].text
+            summaries[symbol] = _ai_call(api_key, prompt, max_tokens=900)
         except Exception as e:
             summaries[symbol] = f'⚠️ 分析失敗：{e}'
 
@@ -300,22 +355,46 @@ def export_pdf():
     date_str = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
     filepath = os.path.join(PDF_DIR, f'stock_report_{date_str}.pdf')
 
+    # ── 字體偵測：優先使用專案內字體，兼容 macOS / Windows / Linux ──
     font_name = 'Helvetica'
-    for fp in [
+    font_candidates = [
+        # 專案內（最優先，跨平台通用）→ 下載後放 data/ 即可
         'data/NotoSansSC-Regular.ttf',
+
+        # macOS
         '/System/Library/Fonts/Supplemental/Arial Unicode MS.ttf',
+        '/System/Library/Fonts/STHeiti Light.ttc',
+        '/System/Library/Fonts/STHeiti Medium.ttc',
+        '/Library/Fonts/Arial Unicode MS.ttf',
+
+        # Windows（繁體優先）
+        'C:/Windows/Fonts/msjh.ttf',     # 微軟正黑體（繁體中文）
+        'C:/Windows/Fonts/msjhbd.ttf',   # 微軟正黑體 Bold
+        'C:/Windows/Fonts/mingliu.ttc',  # 新細明體
+        'C:/Windows/Fonts/msyh.ttf',     # 微軟雅黑（簡體）
+        'C:/Windows/Fonts/msyhbd.ttc',
+
+        # Linux
         '/usr/share/fonts/truetype/noto/NotoSansCJKtc-Regular.ttf',
         '/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc',
-        'C:/Windows/Fonts/msyh.ttf',
-    ]:
+        '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc',
+    ]
+
+    for fp in font_candidates:
         if os.path.exists(fp):
             try:
                 pdfmetrics.registerFont(TTFont('CJK', fp))
                 font_name = 'CJK'
+                print(f'[PDF] ✅ 使用字體：{fp}')
                 break
-            except Exception:
+            except Exception as e:
+                print(f'[PDF] ⚠️ 字體載入失敗：{fp} → {e}')
                 continue
 
+    if font_name == 'Helvetica':
+        print('[PDF] ❌ 找不到中文字體，建議將 NotoSansSC-Regular.ttf 放入 data/ 資料夾')
+
+    # ── 建立 PDF ──
     doc = SimpleDocTemplate(filepath, pagesize=A4,
                             rightMargin=2.2*cm, leftMargin=2.2*cm,
                             topMargin=2.5*cm, bottomMargin=2*cm)
@@ -362,7 +441,7 @@ def export_pdf():
 
     story += [
         Spacer(1, 22),
-        Paragraph('⚠️ 免責聲明：本報告由 Claude AI 自動生成，僅供資訊參考，不構成投資建議。投資有風險，請謹慎評估。',
+        Paragraph('免責聲明：本報告由 AI 自動生成，僅供資訊參考，不構成投資建議。投資有風險，請謹慎評估。',
                   sty('D', fontSize=8, leading=13, textColor=colors.HexColor('#94a3b8')))
     ]
 
@@ -405,13 +484,12 @@ def get_screen_tags():
 
 @app.route('/api/screen', methods=['POST'])
 def screen_stocks():
-    import anthropic as ant
     data = request.json
     api_key = data.get('api_key', '').strip()
     tags = data.get('tags', {})
 
     if not api_key:
-        return jsonify({'error': '請先在右上角⚙️設定中輸入 Claude API Key'}), 400
+        return jsonify({'error': '請先在右上角⚙️設定中輸入 Gemini API Key'}), 400
     if not any(tags.values()):
         return jsonify({'error': '請至少選擇一個標籤'}), 400
 
@@ -425,56 +503,53 @@ def screen_stocks():
 
     prompt = f"""你是頂尖台美股分析師，依照以下投資篩選條件，精選當前最值得關注的標的：
 
-【篩選條件】
-{criteria}
+            【篩選條件】
+            {criteria}
 
-請以繁體中文輸出：
+            請以繁體中文輸出：
 
-## 🇹🇼 台股精選（3-4檔）
+            ## 🇹🇼 台股精選（3-4檔）
 
-### [代號] 股票名稱
-**推薦核心：** 一句話說明選股邏輯
-**符合條件：** 符合哪些篩選項
-**基本面：** 財務或業務亮點
-**技術面：** 當前形態與關鍵價位
-**操作週期：** 建議持有時間
-**目標區間：** 合理估值參考
-**主要風險：** 最需注意的威脅
+            ### [代號] 股票名稱
+            **推薦核心：** 說明選股邏輯
+            **符合條件：** 符合哪些篩選項
+            **基本面：** 財務或業務亮點(附上參考來源或理由)
+            **技術面：** 當前形態與關鍵價位(附上參考來源或理由)
+            **操作週期：** 建議持有時間(附上參考來源或理由)
+            **目標區間：** 合理估值參考(附上參考來源或理由)
+            **主要風險：** 最需注意的威脅
 
-（3-4 檔台股）
+            （3-4 檔台股）
 
----
+            ---
 
-## 🇺🇸 美股精選（3-4檔）
+            ## 🇺🇸 美股精選（3-4檔）
 
-（同上格式，3-4 檔美股）
+            （同上格式，3-4 檔美股）
 
----
+            ---
 
-## 📊 整體市場觀點
-（大盤環境分析、資金配置建議、操作紀律提示）
+            ## 📊 整體市場觀點
+            （大盤環境分析、資金配置建議、操作紀律提示）
 
----
-⚠️ 以上為 AI 分析參考，非投資建議。投資有風險，請自行判斷。"""
+            ---
+            ⚠️ 以上為 AI 分析參考，非專業投資建議。"""
 
     try:
-        client = ant.Anthropic(api_key=api_key)
-        msg = client.messages.create(
-            model='claude-haiku-4-5-20251001',
-            max_tokens=2200,
-            messages=[{'role': 'user', 'content': prompt}]
-        )
-        return jsonify({'result': msg.content[0].text, 'criteria': criteria})
+        result = _ai_call(api_key, prompt, max_tokens=2200)
+        return jsonify({'result': result, 'criteria': criteria})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':
+    PORT = 5001   # 改這裡可換 port
+
     print('=' * 52)
     print('  📈 股票資訊助手 Stock Assistant')
     print('=' * 52)
     print(f'  📂 專案路徑 : {os.path.abspath(".")}')
     print(f'  💾 PDF 存放  : {os.path.abspath(PDF_DIR)}')
-    print(f'  🌐 請開啟    : http://localhost:5000')
+    print(f'  🌐 請開啟    : http://127.0.0.1:{PORT}')
     print('=' * 52)
-    app.run(debug=True, port=5000)
+    app.run(debug=True, host='127.0.0.1', port=PORT)

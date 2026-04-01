@@ -483,7 +483,7 @@ input:focus,select:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(245
         📡 抓取最新新聞
       </button>
       <button class="btn btn-ghost" id="btnSummarize" onclick="summarizeNews()" disabled>
-        🤖 Claude 整理摘要
+        🤖 AI 整理摘要
       </button>
       <button class="btn btn-green" id="btnExportPDF" onclick="exportPDF()" disabled>
         📄 匯出 PDF
@@ -521,7 +521,7 @@ input:focus,select:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(245
         <div class="section-title">操作說明</div>
         <div class="card">
           <p style="font-size:13px;color:var(--muted2);line-height:1.8;margin-bottom:14px">
-            選擇多個條件標籤，系統將組合成最佳化的 prompt 詢問 Claude，取得台股與美股推薦標的。
+            選擇多個條件標籤，系統將組合成最佳化的 prompt 詢問 AI，取得台股與美股推薦標的。
           </p>
           <div style="border-top:1px solid var(--border);padding-top:14px">
             <div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-family:var(--font-logo);letter-spacing:1px">標籤說明</div>
@@ -548,11 +548,26 @@ input:focus,select:focus{border-color:var(--amber);box-shadow:0 0 0 3px rgba(245
 <div class="modal-overlay" id="settingsModal">
   <div class="modal">
     <div class="modal-title">⚙ SETTINGS</div>
-    <label class="form-label">Claude API Key</label>
-    <input type="password" id="apiKeyInput" placeholder="sk-ant-api03-…">
-    <p style="font-size:12px;color:var(--muted);margin-top:8px">
-      請至 <a href="https://console.anthropic.com" target="_blank" style="color:var(--amber)">console.anthropic.com</a> 取得 API Key。金鑰儲存於本地伺服器，不會上傳。
-    </p>
+    <label class="form-label">AI API Key（支援 Groq 或 Gemini，皆免費）</label>
+    <input type="password" id="apiKeyInput" placeholder="gsk_… 或 AIzaSy…">
+    <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
+      <div style="background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.25);border-radius:7px;padding:10px 14px">
+        <div style="font-size:12px;font-weight:600;color:var(--green);margin-bottom:4px">✅ 推薦：Groq（最穩定免費）</div>
+        <div style="font-size:12px;color:var(--muted2)">
+          1. 開 <a href="https://console.groq.com/keys" target="_blank" style="color:var(--amber)">console.groq.com/keys</a><br>
+          2. 用 Google 帳號登入 → Create API Key → 複製<br>
+          3. Key 格式：<span style="font-family:monospace;color:var(--green)">gsk_...</span>
+        </div>
+      </div>
+      <div style="background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.25);border-radius:7px;padding:10px 14px">
+        <div style="font-size:12px;font-weight:600;color:var(--blue);margin-bottom:4px">🔵 備選：Gemini（需在正確位置建立）</div>
+        <div style="font-size:12px;color:var(--muted2)">
+          1. 開 <a href="https://aistudio.google.com/app/apikey" target="_blank" style="color:var(--amber)">aistudio.google.com/app/apikey</a><br>
+          2. 點「在新專案中建立 API 金鑰」→ 複製<br>
+          3. Key 格式：<span style="font-family:monospace;color:var(--blue)">AIzaSy...</span>
+        </div>
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-ghost" onclick="closeSettings()">取消</button>
       <button class="btn btn-primary" onclick="saveSettings()">儲存</button>
@@ -597,10 +612,10 @@ async function loadConfig() {
 function updateApiStatus() {
   const el = document.getElementById('apiStatus')
   if (state.apiKey) {
-    el.textContent = `API KEY: ${state.apiKey.slice(0,12)}…`
+    el.textContent = `AI model key: ${state.apiKey.slice(0,12)}…`
     el.style.color = 'var(--green)'
   } else {
-    el.textContent = 'API KEY: 未設定'
+    el.textContent = 'AI model key: 未設定'
     el.style.color = 'var(--muted)'
   }
 }
@@ -628,7 +643,10 @@ function switchTab(idx) {
     b.classList.toggle('active', i === idx))
   document.querySelectorAll('.tab-pane').forEach((p,i) =>
     p.classList.toggle('active', i === idx))
-  if (idx === 1) renderNewsStockSelector()
+  if (idx === 1) {
+    state.selectedNews.clear()          // 重置選擇，預設全選由 renderNewsStockSelector 處理
+    renderNewsStockSelector()
+  }
 }
 
 // ═══════════════════════════════════════════
@@ -769,40 +787,68 @@ function renderNewsStockSelector() {
     el.innerHTML = `<span style="color:var(--muted);font-size:13px">請先在「自選清單」加入股票</span>`
     return
   }
+  // 預設全選
+  state.watchlist.forEach(s => state.selectedNews.add(s.symbol))
+
   el.innerHTML = state.watchlist.map(s => `
-    <label class="stock-checkbox ${state.selectedNews.has(s.symbol)?'selected':''}"
-      onclick="toggleNewsStock('${s.symbol}',this)">
-      <input type="checkbox" ${state.selectedNews.has(s.symbol)?'checked':''}>
+    <div class="stock-checkbox selected" data-sym="${s.symbol}" id="sc_${s.symbol.replace(/\./g,'_')}">
       <span class="sc-sym">${s.symbol}</span>
       <span style="font-size:12px;color:var(--muted)">${s.market}</span>
-    </label>`).join('')
-}
+      <span style="font-size:11px;margin-left:4px">✓</span>
+    </div>`).join('')
 
-function toggleNewsStock(sym, el) {
-  if (state.selectedNews.has(sym)) {
-    state.selectedNews.delete(sym)
-    el.classList.remove('selected')
-  } else {
-    state.selectedNews.add(sym)
-    el.classList.add('selected')
-  }
+  // 用 addEventListener 避免 label+input 雙觸發問題
+  el.querySelectorAll('.stock-checkbox').forEach(div => {
+    div.addEventListener('click', function() {
+      const sym = this.dataset.sym
+      if (state.selectedNews.has(sym)) {
+        state.selectedNews.delete(sym)
+        this.classList.remove('selected')
+        this.querySelector('span:last-child').textContent = ''
+      } else {
+        state.selectedNews.add(sym)
+        this.classList.add('selected')
+        this.querySelector('span:last-child').textContent = '✓'
+      }
+    })
+  })
 }
 
 async function fetchNews() {
-  if (!state.selectedNews.size) { toast('請先選擇要查詢的股票', 'error'); return }
+  if (!state.watchlist.length) { toast('請先在分頁一加入股票', 'error'); return }
+  if (!state.selectedNews.size) { toast('請先點選要查詢的股票標籤', 'error'); return }
+
   const stocks = state.watchlist.filter(s => state.selectedNews.has(s.symbol))
   const el = document.getElementById('newsContent')
   el.innerHTML = `<div style="text-align:center;padding:40px;color:var(--muted)">
-    <div class="spinner" style="margin:0 auto 12px"></div>正在抓取新聞…</div>`
+    <div class="spinner" style="margin:0 auto 12px"></div>
+    正在從 Google News 與 Yahoo Finance 抓取新聞（${stocks.length} 檔）…
+  </div>`
+
+  document.getElementById('btnSummarize').disabled = true
+  document.getElementById('btnExportPDF').disabled = true
 
   const data = await apiFetch('/api/news', { method:'POST', json:{ stocks } })
-  if (!data) { el.innerHTML = '<div style="color:var(--red);padding:20px">新聞抓取失敗</div>'; return }
+  if (!data) {
+    el.innerHTML = `<div style="color:var(--red);padding:20px;text-align:center">
+      ⚠️ 新聞抓取失敗，請確認網路連線後重試</div>`
+    return
+  }
+
+  // 檢查是否完全沒有文章
+  const totalArticles = Object.values(data).reduce((sum, d) => sum + (d.articles||[]).length, 0)
+  if (totalArticles === 0) {
+    el.innerHTML = `<div style="color:var(--muted);padding:20px;text-align:center">
+      ⚠️ 未抓到任何新聞，可能是代號格式問題或網路限制</div>`
+    return
+  }
 
   state.newsData = data
   state.summaries = {}
   renderNewsContent()
   document.getElementById('btnSummarize').disabled = false
   document.getElementById('btnExportPDF').disabled = true
+  toast(`✅ 抓到 ${totalArticles} 則新聞`, 'success')
 }
 
 function renderNewsContent() {
@@ -829,7 +875,7 @@ function renderNewsContent() {
     const summaryHtml = summary ? `
       <div class="summary-box">
         <div style="font-family:var(--font-logo);font-size:10px;letter-spacing:2px;color:var(--amber);margin-bottom:12px">
-          🤖 CLAUDE 分析摘要
+          🤖 AI 分析摘要
         </div>
         <div class="summary-content">${renderMarkdown(summary)}</div>
       </div>` : ''
@@ -866,7 +912,7 @@ async function summarizeNews() {
 
   const btn = document.getElementById('btnSummarize')
   btn.disabled = true
-  btn.innerHTML = '<span class="spinner"></span> Claude 分析中…'
+  btn.innerHTML = '<span class="spinner"></span> AI 分析中…'
 
   const data = await apiFetch('/api/summarize', {
     method:'POST',
@@ -874,7 +920,7 @@ async function summarizeNews() {
   })
 
   btn.disabled = false
-  btn.innerHTML = '🤖 Claude 整理摘要'
+  btn.innerHTML = '🤖 AI 整理摘要'
 
   if (data?.error) { toast(data.error, 'error'); return }
   state.summaries = data || {}
@@ -884,7 +930,7 @@ async function summarizeNews() {
 }
 
 async function exportPDF() {
-  if (!Object.keys(state.summaries).length) { toast('請先執行 Claude 摘要', 'error'); return }
+  if (!Object.keys(state.summaries).length) { toast('請先執行 AI 摘要', 'error'); return }
   const btn = document.getElementById('btnExportPDF')
   btn.disabled = true
   btn.innerHTML = '<span class="spinner"></span> 產生 PDF…'
@@ -1012,7 +1058,7 @@ async function runScreener() {
   const el = document.getElementById('screenResult')
   el.innerHTML = `<div style="text-align:center;padding:60px;color:var(--muted)">
     <div class="spinner" style="margin:0 auto 16px;width:28px;height:28px;border-width:3px"></div>
-    Claude 正在選股分析中…<br>
+    AI 正在選股分析中…<br>
     <span style="font-size:12px">通常需要 10-20 秒</span>
   </div>`
 
@@ -1026,7 +1072,7 @@ async function runScreener() {
   el.innerHTML = `
     <div class="screen-result">
       <div style="font-family:var(--font-logo);font-size:10px;letter-spacing:2px;
-        color:var(--amber);margin-bottom:4px">🎯 CLAUDE 選股結果</div>
+        color:var(--amber);margin-bottom:4px">🎯 AI 選股結果</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:20px;
         font-family:var(--font-data)">${new Date().toLocaleString('zh-TW')}</div>
       ${data.criteria ? `
