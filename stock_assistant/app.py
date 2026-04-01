@@ -213,7 +213,7 @@ def get_news():
     result = {}
     for stock in stocks:
         sym = stock['symbol']
-        query = f'{stock.get("name", sym)} {sym} 股票 新聞'
+        query = f'股票{stock.get("name", sym)} {sym} 最新新聞'
         result[sym] = {
             'stock': stock,
             'articles': fetch_google_news(query) + fetch_yahoo_news(sym)
